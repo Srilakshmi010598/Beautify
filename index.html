@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>Beautify-face</title>
+	<style type="text/css">
+		.inputoutput {
+			float: left;
+			margin: 10px;
+		}
+	</style>
+</head>
+
+<body>
+
+	<div class="canvas-wrapper">
+		<canvas id="output"></canvas>
+		<video id="video" playsinline></video>
+		<div id="threejs-container"></div>
+	</div>
+
+</body>
+
+
+
+<script type="text/javascript">
+function isMobile() {
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return isAndroid || isiOS;
+}
+
+const VIDEO_SIZE = 500;
+const mobile = isMobile();
+
+let width = 320;
+let height = 0;
+	let streaming = false;
+
+	let video = document.getElementById("video");
+	let stream = null;
+	let vc = null;
+	let videoWidth, videoHeight;
+
+	async function setupCamera() {
+  video = document.getElementById('video');
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    'audio': false,
+    'video': {
+      facingMode: 'user',
+      // Only setting the video to a specified size in order to accommodate a
+      // point cloud, so on mobile devices accept the default size.
+      width: mobile ? undefined : VIDEO_SIZE,
+      height: mobile ? undefined : VIDEO_SIZE
+    },
+  });
+
+  video.srcObject = stream;
+  if (video)
+		{
+			video.addEventListener("canplay", function(ev){
+    if (!streaming) {
+      height = video.videoHeight / (video.videoWidth/width);
+      video.setAttribute("width", width);
+      video.setAttribute("height", height);
+      streaming = true;
+      vc = new cv.VideoCapture(video);
+    }
+    startVideoProcessing();
+  }, false);
+	}
+	 
+}
+
+let src = null;
+let dstC3 = null;
+
+
+	async function startVideoProcessing() {
+		console.log(streaming);
+		if (!streaming) { console.warn("Please startup your webcam"); return; }
+		stopVideoProcessing();
+		src = new cv.Mat(height, width, cv.CV_8UC4);
+		dstC3 = new cv.Mat(height, width, cv.CV_8UC3);
+		requestAnimationFrame(processVideo);
+	}
+
+
+	function bilateralFilter(src) {
+		let mat = new cv.Mat(height, width, cv.CV_8UC3);
+		cv.cvtColor(src, mat, cv.COLOR_RGBA2RGB);
+		cv.bilateralFilter(mat, dstC3, 6, 50, 50, cv.BORDER_DEFAULT);
+		mat.delete();
+		return dstC3;
+	}
+
+
+	function processVideo() {
+		//stats.begin();
+		vc.read(src);
+		let result;
+
+		result = bilateralFilter(src);
+
+		cv.imshow("output", result);
+		//stats.end();
+		//lastFilter = controls.filter;
+		requestAnimationFrame(processVideo);
+	}
+
+	function stopVideoProcessing() {
+  if (src != null && !src.isDeleted()) src.delete();
+  if (dstC3 != null && !dstC3.isDeleted()) dstC3.delete();
+}
+
+
+	async function opencvIsReady() {
+		console.log('OpenCV.js is ready');
+		await setupCamera();
+		video.play();
+		videoWidth = video.videoWidth;
+  videoHeight = video.videoHeight;
+  video.width = videoWidth;
+  video.height = videoHeight;
+  
+	}
+</script>
+<script async src="https://docs.opencv.org/master/opencv.js" onload="opencvIsReady();"
+		type="text/javascript"></script>
+
+</html>
